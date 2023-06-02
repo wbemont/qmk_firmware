@@ -127,6 +127,18 @@ void keyboard_post_init_user(void) {
 #endif // BACKLIGHT_ENABLE
 }
 
+void suspend_wakeup_init_kb(void) {
+#ifdef BACKLIGHT_ENABLE
+    breathing_disable();
+#endif // BACKLIGHT_ENABLE
+}
+
+void suspend_power_down_kb(void) {
+#ifdef BACKLIGHT_ENABLE
+    breathing_enable();
+#endif // BACKLIGHT_ENABLE
+}
+
 bool system76_ec_fan_get(uint8_t index, uint8_t * duty) {
     switch (index) {
         case 0:
