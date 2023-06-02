@@ -46,7 +46,7 @@ struct Fan {
     pwmchannel_t pwm_chan;
     int pwm_gpio;
     int tach_gpio;
-    int duty;
+    uint8_t duty;
 };
 
 static struct Fan FANOUT1 = {
@@ -54,7 +54,7 @@ static struct Fan FANOUT1 = {
     .pwm_chan = RP2040_PWM_CHANNEL_A,
     .pwm_gpio = PWM0,
     .tach_gpio = TACH0,
-    .duty = 0x4000,
+    .duty = 0x40,
 };
 
 static struct Fan FANOUT2 = {
@@ -62,7 +62,7 @@ static struct Fan FANOUT2 = {
     .pwm_chan = RP2040_PWM_CHANNEL_B,
     .pwm_gpio = PWM1,
     .tach_gpio = TACH1,
-    .duty = 0x4000,
+    .duty = 0x40,
 };
 
 static struct Fan FANOUT3 = {
@@ -70,7 +70,7 @@ static struct Fan FANOUT3 = {
     .pwm_chan = RP2040_PWM_CHANNEL_A,
     .pwm_gpio = PWM2,
     .tach_gpio = TACH2,
-    .duty = 0x4000,
+    .duty = 0x40,
 };
 
 static struct Fan FANOUT4 = {
@@ -78,12 +78,12 @@ static struct Fan FANOUT4 = {
     .pwm_chan = RP2040_PWM_CHANNEL_B,
     .pwm_gpio = PWM3,
     .tach_gpio = TACH3,
-    .duty = 0x4000,
+    .duty = 0x40,
 };
 
 void fan_init(struct Fan * fan) {
     palSetPadMode(PAL_PORT(fan->pwm_gpio), PAL_PAD(fan->pwm_gpio), BACKLIGHT_PAL_MODE);
-    pwmEnableChannel(fan->pwm_drv, fan->pwm_chan - 1, PWM_FRACTION_TO_WIDTH(fan->pwm_drv, 0xFFFF, fan->duty));
+    pwmEnableChannel(fan->pwm_drv, fan->pwm_chan - 1, PWM_FRACTION_TO_WIDTH(fan->pwm_drv, 0xFF, fan->duty));
 }
 
 void matrix_init_kb(void) {
@@ -125,4 +125,48 @@ void keyboard_post_init_user(void) {
     backlight_level(3);
     breathing_enable();
 #endif // BACKLIGHT_ENABLE
+}
+
+bool system76_ec_fan_get(uint8_t index, uint8_t * duty) {
+    switch (index) {
+        case 0:
+            *duty = FANOUT1.duty;
+            return true;
+        case 1:
+            *duty = FANOUT2.duty;
+            return true;
+        case 2:
+            *duty = FANOUT3.duty;
+            fan_init(&FANOUT3);
+            return true;
+        case 3:
+            *duty = FANOUT4.duty;
+            fan_init(&FANOUT4);
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool system76_ec_fan_set(uint8_t index, uint8_t duty) {
+    switch (index) {
+        case 0:
+            FANOUT1.duty = duty;
+            fan_init(&FANOUT1);
+            return true;
+        case 1:
+            FANOUT2.duty = duty;
+            fan_init(&FANOUT2);
+            return true;
+        case 2:
+            FANOUT3.duty = duty;
+            fan_init(&FANOUT3);
+            return true;
+        case 3:
+            FANOUT4.duty = duty;
+            fan_init(&FANOUT4);
+            return true;
+        default:
+            return false;
+    }
 }

@@ -19,4 +19,4 @@ AUDIO_ENABLE = no           # Audio output
 LTO_ENABLE = yes            # Link-time optimization for smaller binary
 
 # Add System76 EC command interface
-#TODO SRC += system76_ec.c
+SRC += system76_ec.c

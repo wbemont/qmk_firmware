@@ -18,17 +18,21 @@
 
 #include <string.h>
 
-#include "dynamic_keymap.h"
 #include "eeprom.h"
+#include "quantum.h"
 #include "raw_hid.h"
-#include "rgb_matrix.h"
 #include "version.h"
+#ifdef DYNAMIC_KEYMAP_ENABLE
+    #include "dynamic_keymap.h"
+#endif // DYNAMIC_KEYMAP_ENABLE
 
 enum Command {
     CMD_PROBE         = 1,   // Probe for System76 EC protocol
     CMD_BOARD         = 2,   // Read board string
     CMD_VERSION       = 3,   // Read version string
     CMD_RESET         = 6,   // Reset to bootloader
+    CMD_FAN_GET       = 7,   // Get fan speeds
+    CMD_FAN_SET       = 8,   // Set fan speeds
     CMD_KEYMAP_GET    = 9,   // Get keyboard map index
     CMD_KEYMAP_SET    = 10,  // Set keyboard map index
     CMD_LED_GET_VALUE = 11,  // Get LED value by index
@@ -47,6 +51,7 @@ bool input_disabled = false;
 #define CMD_LED_INDEX_ALL 0xFF
 
 static bool keymap_get(uint8_t layer, uint8_t output, uint8_t input, uint16_t *value) {
+#ifdef DYNAMIC_KEYMAP_ENABLE
     if (layer < dynamic_keymap_get_layer_count()) {
         if (output < MATRIX_ROWS) {
             if (input < MATRIX_COLS) {
@@ -55,10 +60,12 @@ static bool keymap_get(uint8_t layer, uint8_t output, uint8_t input, uint16_t *v
             }
         }
     }
+#endif // DYNAMIC_KEYMAP_ENABLE
     return false;
 }
 
 static bool keymap_set(uint8_t layer, uint8_t output, uint8_t input, uint16_t value) {
+#ifdef DYNAMIC_KEYMAP_ENABLE
     if (layer < dynamic_keymap_get_layer_count()) {
         if (output < MATRIX_ROWS) {
             if (input < MATRIX_COLS) {
@@ -67,6 +74,7 @@ static bool keymap_set(uint8_t layer, uint8_t output, uint8_t input, uint16_t va
             }
         }
     }
+#endif // DYNAMIC_KEYMAP_ENABLE
     return false;
 }
 
@@ -83,6 +91,14 @@ void system76_ec_unlock(void) {
 }
 
 bool system76_ec_is_unlocked(void) { return bootloader_unlocked; }
+
+__attribute__((weak)) bool system76_ec_fan_get(uint8_t index, uint8_t * duty) {
+    return false;
+}
+
+__attribute__((weak)) bool system76_ec_fan_set(uint8_t index, uint8_t duty) {
+    return false;
+}
 
 #ifdef RGB_MATRIX_CUSTOM_KB
 enum Mode {
@@ -245,6 +261,16 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
             if (bootloader_unlocked) {
                 data[1] = 0;
                 bootloader_reset = true;
+            }
+            break;
+        case CMD_FAN_GET:
+            if (system76_ec_fan_get(data[2], &data[3])) {
+                data[1] = 0;
+            }
+            break;
+        case CMD_FAN_SET:
+            if (system76_ec_fan_set(data[2], data[3])) {
+                data[1] = 0;
             }
             break;
         case CMD_KEYMAP_GET: {
