@@ -11,6 +11,7 @@ WEAR_LEVELING_DRIVER = rp2040_flash
 NKRO_ENABLE = yes           # USB N-key rollover
 RAW_ENABLE = yes            # Raw HID commands (used by Keyboard Configurator)
 BACKLIGHT_ENABLE = yes      # RGB backlight (conflicts with RGB matrix)
+BACKLIGHT_DRIVER = pwm
 RGBLIGHT_ENABLE = no        # Enable keyboard RGB underglow
 RGB_MATRIX_ENABLE = no      # RGB matrix
 RGB_MATRIX_CUSTOM_KB = no   # Custom keyboard effects

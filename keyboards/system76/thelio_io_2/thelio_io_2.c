@@ -17,17 +17,112 @@
 
 #include "thelio_io_2.h"
 
+#define TACH0 GP5
+#define TACH1 GP7
+#define PBSENSE GP8
+#define TACH2 GP9
+#define TACH3 GP11
+#define DIS_PWMIN GP12
+#define PLED GP13
+#define PWM0 GP16
+#define PWM1 GP17
+#define PWM2 GP18
+#define PWM3 GP19
 #define PBRELAY GP22
+#define ADC0 GP26
+#define ADC1 GP27
+#define ADC2 GP28
+#define ADC3 GP29
+
+const static PWMConfig PWM_CFG = {
+    .frequency = BACKLIGHT_PWM_COUNTER_FREQUENCY, /* PWM clock frequency  */
+    .period    = BACKLIGHT_PWM_PERIOD,            /* PWM period in counter ticks. e.g. clock frequency is 10KHz, period is 256 ticks then t_period is 25.6ms */
+    .channels[RP2040_PWM_CHANNEL_A - 1].mode = PWM_OUTPUT_ACTIVE_LOW,
+    .channels[RP2040_PWM_CHANNEL_B - 1].mode = PWM_OUTPUT_ACTIVE_LOW,
+};
+
+struct Fan {
+    PWMDriver * pwm_drv;
+    pwmchannel_t pwm_chan;
+    int pwm_gpio;
+    int tach_gpio;
+    int duty;
+};
+
+static struct Fan FANOUT1 = {
+    .pwm_drv = &PWMD0,
+    .pwm_chan = RP2040_PWM_CHANNEL_A,
+    .pwm_gpio = PWM0,
+    .tach_gpio = TACH0,
+    .duty = 0x4000,
+};
+
+static struct Fan FANOUT2 = {
+    .pwm_drv = &PWMD0,
+    .pwm_chan = RP2040_PWM_CHANNEL_B,
+    .pwm_gpio = PWM1,
+    .tach_gpio = TACH1,
+    .duty = 0x4000,
+};
+
+static struct Fan FANOUT3 = {
+    .pwm_drv = &PWMD1,
+    .pwm_chan = RP2040_PWM_CHANNEL_A,
+    .pwm_gpio = PWM2,
+    .tach_gpio = TACH2,
+    .duty = 0x4000,
+};
+
+static struct Fan FANOUT4 = {
+    .pwm_drv = &PWMD1,
+    .pwm_chan = RP2040_PWM_CHANNEL_B,
+    .pwm_gpio = PWM3,
+    .tach_gpio = TACH3,
+    .duty = 0x4000,
+};
+
+void fan_init(struct Fan * fan) {
+    palSetPadMode(PAL_PORT(fan->pwm_gpio), PAL_PAD(fan->pwm_gpio), BACKLIGHT_PAL_MODE);
+    pwmEnableChannel(fan->pwm_drv, fan->pwm_chan - 1, PWM_FRACTION_TO_WIDTH(fan->pwm_drv, 0xFFFF, fan->duty));
+}
 
 void matrix_init_kb(void) {
     setPinOutput(PBRELAY);
     writePinHigh(PBRELAY);
+
+    setPinOutput(DIS_PWMIN);
+    writePinHigh(DIS_PWMIN);
+
+    setPinOutput(PWM1);
+    writePinHigh(PWM1);
+
+    setPinOutput(PWM2);
+    writePinHigh(PWM2);
+
+    setPinOutput(PWM3);
+    writePinHigh(PWM3);
+
+    // Start PWM devices used for fans
+    pwmStart(&PWMD0, &PWM_CFG);
+    pwmStart(&PWMD1, &PWM_CFG);
+
+    // Initialize fans
+    fan_init(&FANOUT1);
+    fan_init(&FANOUT2);
+    fan_init(&FANOUT3);
+    fan_init(&FANOUT4);
 }
 
-#ifdef CONSOLE_ENABLE
 void keyboard_post_init_user(void) {
+#ifdef CONSOLE_ENABLE
     debug_enable   = true;
     debug_matrix   = false;
     debug_keyboard = false;
+#endif // CONSOLE_ENABLE
+
+#ifdef BACKLIGHT_ENABLE
+    backlight_enable();
+    backlight_level(3);
+    breathing_enable();
+#endif // BACKLIGHT_ENABLE
 }
-#endif  // CONSOLE_ENABLE
