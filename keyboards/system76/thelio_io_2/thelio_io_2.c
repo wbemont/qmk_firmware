@@ -47,6 +47,10 @@ struct Fan {
     int pwm_gpio;
     int tach_gpio;
     uint8_t duty;
+    uint16_t tach;
+    uint8_t tach_state;
+    uint16_t tach_edge;
+    uint32_t tach_time;
 };
 
 static struct Fan FANOUT1 = {
@@ -54,7 +58,11 @@ static struct Fan FANOUT1 = {
     .pwm_chan = RP2040_PWM_CHANNEL_A,
     .pwm_gpio = PWM0,
     .tach_gpio = TACH0,
-    .duty = 0x40,
+    .duty = 0,
+    .tach = 0,
+    .tach_state = 0,
+    .tach_edge = 0,
+    .tach_time = 0,
 };
 
 static struct Fan FANOUT2 = {
@@ -62,7 +70,11 @@ static struct Fan FANOUT2 = {
     .pwm_chan = RP2040_PWM_CHANNEL_B,
     .pwm_gpio = PWM1,
     .tach_gpio = TACH1,
-    .duty = 0x40,
+    .duty = 0,
+    .tach = 0,
+    .tach_state = 0,
+    .tach_edge = 0,
+    .tach_time = 0,
 };
 
 static struct Fan FANOUT3 = {
@@ -70,7 +82,11 @@ static struct Fan FANOUT3 = {
     .pwm_chan = RP2040_PWM_CHANNEL_A,
     .pwm_gpio = PWM2,
     .tach_gpio = TACH2,
-    .duty = 0x40,
+    .duty = 0,
+    .tach = 0,
+    .tach_state = 0,
+    .tach_edge = 0,
+    .tach_time = 0,
 };
 
 static struct Fan FANOUT4 = {
@@ -78,29 +94,47 @@ static struct Fan FANOUT4 = {
     .pwm_chan = RP2040_PWM_CHANNEL_B,
     .pwm_gpio = PWM3,
     .tach_gpio = TACH3,
-    .duty = 0x40,
+    .duty = 0,
+    .tach = 0,
+    .tach_state = 0,
+    .tach_edge = 0,
+    .tach_time = 0,
 };
 
 void fan_init(struct Fan * fan) {
     palSetPadMode(PAL_PORT(fan->pwm_gpio), PAL_PAD(fan->pwm_gpio), BACKLIGHT_PAL_MODE);
     pwmEnableChannel(fan->pwm_drv, fan->pwm_chan - 1, PWM_FRACTION_TO_WIDTH(fan->pwm_drv, 0xFF, fan->duty));
+
+    setPinInputHigh(fan->tach_gpio);
+    fan->tach_state = readPin(fan->tach_gpio);
 }
 
-void matrix_init_kb(void) {
+void fan_scan(struct Fan * fan) {
+    uint8_t tach_state = readPin(fan->tach_gpio);
+    if (tach_state != fan->tach_state) {
+        fan->tach_edge += 1;
+        fan->tach_state = tach_state;
+    }
+
+    uint32_t time = timer_read32();
+    if (TIMER_DIFF_32(time, fan->tach_time) >= 1000) {
+        // Each rotation of the fan has two pulses. Each pulse has two edges.
+        // There are four edges per rotation. RPM is therefore:
+        // 60 * edges per second / 4, or 15 * edges per second
+        fan->tach = 15 * fan->tach_edge;
+        fan->tach_edge = 0;
+        fan->tach_time = time;
+    }
+}
+
+void keyboard_pre_init_kb(void) {
+    // PBRELAY must be high to capture power button presses
     setPinOutput(PBRELAY);
     writePinHigh(PBRELAY);
 
+    // DIS_PWMIN must be high to control fans
     setPinOutput(DIS_PWMIN);
     writePinHigh(DIS_PWMIN);
-
-    setPinOutput(PWM1);
-    writePinHigh(PWM1);
-
-    setPinOutput(PWM2);
-    writePinHigh(PWM2);
-
-    setPinOutput(PWM3);
-    writePinHigh(PWM3);
 
     // Start PWM devices used for fans
     pwmStart(&PWMD0, &PWM_CFG);
@@ -111,20 +145,36 @@ void matrix_init_kb(void) {
     fan_init(&FANOUT2);
     fan_init(&FANOUT3);
     fan_init(&FANOUT4);
+
+    // Call user pre_init function
+    keyboard_pre_init_user();
 }
 
-void keyboard_post_init_user(void) {
+void keyboard_post_init_kb(void) {
 #ifdef CONSOLE_ENABLE
+    // Set console verbosity
     debug_enable   = true;
     debug_matrix   = false;
     debug_keyboard = false;
 #endif // CONSOLE_ENABLE
 
 #ifdef BACKLIGHT_ENABLE
+    // Set backlight defaults
     backlight_enable();
     backlight_level(3);
-    breathing_enable();
+    breathing_disable();
 #endif // BACKLIGHT_ENABLE
+
+    // Call user post_init function
+    keyboard_post_init_user();
+}
+
+void housekeeping_task_kb(void) {
+    // Scan fans for tachometer
+    fan_scan(&FANOUT1);
+    fan_scan(&FANOUT2);
+    fan_scan(&FANOUT3);
+    fan_scan(&FANOUT4);
 }
 
 void suspend_wakeup_init_kb(void) {
@@ -149,11 +199,9 @@ bool system76_ec_fan_get(uint8_t index, uint8_t * duty) {
             return true;
         case 2:
             *duty = FANOUT3.duty;
-            fan_init(&FANOUT3);
             return true;
         case 3:
             *duty = FANOUT4.duty;
-            fan_init(&FANOUT4);
             return true;
         default:
             return false;
@@ -177,6 +225,25 @@ bool system76_ec_fan_set(uint8_t index, uint8_t duty) {
         case 3:
             FANOUT4.duty = duty;
             fan_init(&FANOUT4);
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool system76_ec_fan_tach(uint8_t index, uint16_t * tach) {
+    switch (index) {
+        case 0:
+            *tach = FANOUT1.tach;
+            return true;
+        case 1:
+            *tach = FANOUT2.tach;
+            return true;
+        case 2:
+            *tach = FANOUT3.tach;
+            return true;
+        case 3:
+            *tach = FANOUT4.tach;
             return true;
         default:
             return false;

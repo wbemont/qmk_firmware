@@ -44,6 +44,7 @@ enum Command {
     CMD_MATRIX_GET    = 17,  // Get currently pressed keys
     CMD_LED_SAVE      = 18,  // Save LED settings to ROM
     CMD_SET_NO_INPUT  = 19,  // Enable/disable no input mode
+    CMD_FAN_TACH      = 22,  // Get fan tachometer
 };
 
 bool input_disabled = false;
@@ -97,6 +98,10 @@ __attribute__((weak)) bool system76_ec_fan_get(uint8_t index, uint8_t * duty) {
 }
 
 __attribute__((weak)) bool system76_ec_fan_set(uint8_t index, uint8_t duty) {
+    return false;
+}
+
+__attribute__((weak)) bool system76_ec_fan_tach(uint8_t index, uint16_t * tach) {
     return false;
 }
 
@@ -433,6 +438,14 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
             clear_keyboard();
             input_disabled = data[2] != 0;
             data[1] = 0;
+        } break;
+        case CMD_FAN_TACH: {
+            uint16_t tach = 0;
+            if (system76_ec_fan_tach(data[2], &tach)) {
+                data[3] = (uint8_t)tach;
+                data[4] = (uint8_t)(tach >> 8);
+                data[1] = 0;
+            }
         } break;
     }
 
