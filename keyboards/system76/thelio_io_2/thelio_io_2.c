@@ -35,8 +35,8 @@
 #define ADC3 GP29
 
 const static PWMConfig PWM_CFG = {
-    .frequency = BACKLIGHT_PWM_COUNTER_FREQUENCY, /* PWM clock frequency  */
-    .period    = BACKLIGHT_PWM_PERIOD,            /* PWM period in counter ticks. e.g. clock frequency is 10KHz, period is 256 ticks then t_period is 25.6ms */
+    .frequency = 25000, /* PWM clock frequency, 25KHz */
+    .period    = 255, /* PWM period in counter ticks. e.g. clock frequency is 25KHz, period is 255 ticks then t_period is 10.2ms */
     .channels[RP2040_PWM_CHANNEL_A - 1].mode = PWM_OUTPUT_ACTIVE_LOW,
     .channels[RP2040_PWM_CHANNEL_B - 1].mode = PWM_OUTPUT_ACTIVE_LOW,
 };
@@ -103,7 +103,7 @@ static struct Fan FANOUT4 = {
 
 void fan_init(struct Fan * fan) {
     palSetPadMode(PAL_PORT(fan->pwm_gpio), PAL_PAD(fan->pwm_gpio), BACKLIGHT_PAL_MODE);
-    pwmEnableChannel(fan->pwm_drv, fan->pwm_chan - 1, PWM_FRACTION_TO_WIDTH(fan->pwm_drv, 0xFF, fan->duty));
+    pwmEnableChannel(fan->pwm_drv, fan->pwm_chan - 1, fan->duty);
 
     setPinInputHigh(fan->tach_gpio);
     fan->tach_state = readPin(fan->tach_gpio);
