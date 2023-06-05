@@ -36,6 +36,9 @@
 #define ADC2 GP28
 #define ADC3 GP29
 
+#define UNLOCK_TIMEOUT 15000
+static uint32_t unlock_time = 0;
+
 const static PWMConfig PWM_CFG = {
     .frequency = 25000, /* PWM clock frequency, 25KHz */
     .period    = 255, /* PWM period in counter ticks. e.g. clock frequency is 25KHz, period is 255 ticks then t_period is 10.2ms */
@@ -131,7 +134,7 @@ void fan_scan(struct Fan * fan, uint32_t time) {
 void keyboard_pre_init_kb(void) {
     // PBRELAY must be high to capture power button presses
     setPinOutput(PBRELAY);
-    writePinHigh(PBRELAY);
+    writePinLow(PBRELAY);
 
     // DIS_PWMIN must be high to control fans
     setPinOutput(DIS_PWMIN);
@@ -162,7 +165,7 @@ void keyboard_post_init_kb(void) {
 #ifdef BACKLIGHT_ENABLE
     // Set backlight defaults
     backlight_enable();
-    backlight_level(3);
+    backlight_level(BACKLIGHT_LEVELS);
     breathing_disable();
 #endif // BACKLIGHT_ENABLE
 
@@ -179,19 +182,32 @@ void housekeeping_task_kb(void) {
     fan_scan(&FANOUT3, time);
     fan_scan(&FANOUT4, time);
 
-    /*TODO
-    #define UNLOCK_TIMEOUT 5000
-    static uint32_t unlock_time = 0;
-    
     // Check if trying to unlock
     if (readPin(PBRELAY)) {
-        // Check if unlock timeout expired
-        if (TIMER_DIFF_32(time, unlock_time) >= UNLOCK_TIMEOUT) {
+        uint32_t unlock_elapsed = TIMER_DIFF_32(time, unlock_time);
+        if (
+            // If not unlocked
+            !system76_ec_is_unlocked() &&
+            // If unlock timer not expired
+            (unlock_elapsed <= UNLOCK_TIMEOUT)
+        ) {
+#ifdef BACKLIGHT_ENABLE
+        backlight_set(((time % 1000) * (BACKLIGHT_LEVELS + 1)) / 1000);
+#endif // BACKLIGHT_ENABLE
+        } else {
             // Disable power button override
             writePinLow(PBRELAY);
+#ifdef BACKLIGHT_ENABLE
+            backlight_set(get_backlight_level());
+#endif // BACKLIGHT_ENABLE
         }
     }
-    */
+
+    if (system76_ec_is_unlocked()) {
+#ifdef BACKLIGHT_ENABLE
+        backlight_set(BACKLIGHT_LEVELS - ((time % 1000) * (BACKLIGHT_LEVELS + 1)) / 1000);
+#endif // BACKLIGHT_ENABLE
+    }
 }
 
 bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
@@ -284,5 +300,34 @@ bool system76_ec_fan_tach(uint8_t index, uint16_t * tach) {
             return true;
         default:
             return false;
+    }
+}
+
+bool system76_ec_security_get(enum SecurityState * state) {
+    if (system76_ec_is_unlocked()) {
+        *state = SECURITY_STATE_UNLOCK;
+    } else if (readPin(PBRELAY)) {
+        *state = SECURITY_STATE_PREPARE_UNLOCK;
+    } else {
+        *state = SECURITY_STATE_LOCK;
+    }
+    return true;
+}
+
+bool system76_ec_security_set(enum SecurityState state) {
+    if (state == SECURITY_STATE_PREPARE_UNLOCK) {
+        if (
+            // Not already unlocked
+            !system76_ec_is_unlocked() &&
+            // Not already overriding power button
+            !readPin(PBRELAY)
+        ) {
+            // Set power button override
+            unlock_time = timer_read32();
+            writePinHigh(PBRELAY);
+        }
+        return true;
+    } else {
+        return false;
     }
 }

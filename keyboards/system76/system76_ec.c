@@ -46,6 +46,8 @@ enum Command {
     CMD_MATRIX_GET    = 17,  // Get currently pressed keys
     CMD_LED_SAVE      = 18,  // Save LED settings to ROM
     CMD_SET_NO_INPUT  = 19,  // Enable/disable no input mode
+    CMD_SECURITY_GET  = 20,  // Get security state
+    CMD_SECURITY_SET  = 21,  // Set security state
     CMD_FAN_TACH      = 22,  // Get fan tachometer
 };
 
@@ -102,6 +104,14 @@ __attribute__((weak)) bool system76_ec_fan_set(uint8_t index, uint8_t duty) {
 }
 
 __attribute__((weak)) bool system76_ec_fan_tach(uint8_t index, uint16_t * tach) {
+    return false;
+}
+
+__attribute__((weak)) bool system76_ec_security_get(enum SecurityState * security_state) {
+    return false;
+}
+
+__attribute__((weak)) bool system76_ec_security_set(enum SecurityState security_state) {
     return false;
 }
 
@@ -447,6 +457,16 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
                 data[1] = 0;
             }
         } break;
+        case CMD_SECURITY_GET:
+            if (system76_ec_security_get(&data[2])) {
+                data[1] = 0;
+            }
+            break;
+        case CMD_SECURITY_SET:
+            if (system76_ec_security_set(data[2])) {
+                data[1] = 0;
+            }
+            break;
     }
 
     raw_hid_send(data, length);

@@ -17,6 +17,17 @@
 
 #pragma once
 
+enum SecurityState {
+    // Default value, flashing is prevented, cannot be set with CMD_SECURITY_SET
+    SECURITY_STATE_LOCK = 0,
+    // Flashing is allowed, cannot be set with CMD_SECURITY_SET
+    SECURITY_STATE_UNLOCK = 1,
+    // Flashing will be prevented on the next reboot
+    SECURITY_STATE_PREPARE_LOCK = 2,
+    // Flashing will be allowed on the next reboot
+    SECURITY_STATE_PREPARE_UNLOCK = 3,
+};
+
 extern bool input_disabled;
 
 void system76_ec_unlock(void);
@@ -25,3 +36,6 @@ bool system76_ec_is_unlocked(void);
 bool system76_ec_fan_get(uint8_t index, uint8_t * duty);
 bool system76_ec_fan_set(uint8_t index, uint8_t duty);
 bool system76_ec_fan_tach(uint8_t index, uint16_t * tach);
+
+bool system76_ec_security_get(enum SecurityState * state);
+bool system76_ec_security_set(enum SecurityState state);
