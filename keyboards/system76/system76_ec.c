@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2021  System76
+ *  Copyright (C) 2023  System76
  *  Copyright (C) 2021  Jimmy Cassis <KernelOops@outlook.com>
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -25,6 +25,8 @@
 #ifdef DYNAMIC_KEYMAP_ENABLE
     #include "dynamic_keymap.h"
 #endif // DYNAMIC_KEYMAP_ENABLE
+
+#include "system76_ec.h"
 
 enum Command {
     CMD_PROBE         = 1,   // Probe for System76 EC protocol

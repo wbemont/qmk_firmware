@@ -15,6 +15,8 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "../system76_ec.h"
+
 #include "thelio_io_2.h"
 
 #define TACH0 GP5
@@ -129,7 +131,7 @@ void fan_scan(struct Fan * fan, uint32_t time) {
 void keyboard_pre_init_kb(void) {
     // PBRELAY must be high to capture power button presses
     setPinOutput(PBRELAY);
-    writePinLow(PBRELAY);
+    writePinHigh(PBRELAY);
 
     // DIS_PWMIN must be high to control fans
     setPinOutput(DIS_PWMIN);
@@ -168,9 +170,6 @@ void keyboard_post_init_kb(void) {
     keyboard_post_init_user();
 }
 
-#define UNLOCK_TIMEOUT 5000
-static uint32_t unlock_time = 0;
-
 void housekeeping_task_kb(void) {
     uint32_t time = timer_read32();
 
@@ -180,6 +179,10 @@ void housekeeping_task_kb(void) {
     fan_scan(&FANOUT3, time);
     fan_scan(&FANOUT4, time);
 
+    /*TODO
+    #define UNLOCK_TIMEOUT 5000
+    static uint32_t unlock_time = 0;
+    
     // Check if trying to unlock
     if (readPin(PBRELAY)) {
         // Check if unlock timeout expired
@@ -188,6 +191,27 @@ void housekeeping_task_kb(void) {
             writePinLow(PBRELAY);
         }
     }
+    */
+}
+
+bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
+    if (input_disabled) {
+        return false;
+    }
+
+    if (!process_record_user(keycode, record)) {
+        return false;
+    }
+
+    switch (keycode) {
+        case QK_BOOT:
+            if (record->event.pressed) {
+                system76_ec_unlock();
+            }
+            return false;
+    }
+
+    return true;
 }
 
 void suspend_wakeup_init_kb(void) {
