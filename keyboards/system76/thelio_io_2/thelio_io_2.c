@@ -109,14 +109,13 @@ void fan_init(struct Fan * fan) {
     fan->tach_state = readPin(fan->tach_gpio);
 }
 
-void fan_scan(struct Fan * fan) {
+void fan_scan(struct Fan * fan, uint32_t time) {
     uint8_t tach_state = readPin(fan->tach_gpio);
     if (tach_state != fan->tach_state) {
         fan->tach_edge += 1;
         fan->tach_state = tach_state;
     }
 
-    uint32_t time = timer_read32();
     if (TIMER_DIFF_32(time, fan->tach_time) >= 1000) {
         // Each rotation of the fan has two pulses. Each pulse has two edges.
         // There are four edges per rotation. RPM is therefore:
@@ -130,7 +129,7 @@ void fan_scan(struct Fan * fan) {
 void keyboard_pre_init_kb(void) {
     // PBRELAY must be high to capture power button presses
     setPinOutput(PBRELAY);
-    writePinHigh(PBRELAY);
+    writePinLow(PBRELAY);
 
     // DIS_PWMIN must be high to control fans
     setPinOutput(DIS_PWMIN);
@@ -169,12 +168,26 @@ void keyboard_post_init_kb(void) {
     keyboard_post_init_user();
 }
 
+#define UNLOCK_TIMEOUT 5000
+static uint32_t unlock_time = 0;
+
 void housekeeping_task_kb(void) {
+    uint32_t time = timer_read32();
+
     // Scan fans for tachometer
-    fan_scan(&FANOUT1);
-    fan_scan(&FANOUT2);
-    fan_scan(&FANOUT3);
-    fan_scan(&FANOUT4);
+    fan_scan(&FANOUT1, time);
+    fan_scan(&FANOUT2, time);
+    fan_scan(&FANOUT3, time);
+    fan_scan(&FANOUT4, time);
+
+    // Check if trying to unlock
+    if (readPin(PBRELAY)) {
+        // Check if unlock timeout expired
+        if (TIMER_DIFF_32(time, unlock_time) >= UNLOCK_TIMEOUT) {
+            // Disable power button override
+            writePinLow(PBRELAY);
+        }
+    }
 }
 
 void suspend_wakeup_init_kb(void) {

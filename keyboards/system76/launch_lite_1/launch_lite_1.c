@@ -174,11 +174,7 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
             if (record->event.pressed) {
                 system76_ec_unlock();
             }
-#ifdef SYSTEM76_EC
             return false;
-#else
-            return true;
-#endif
         case RGB_VAD:
             if (record->event.pressed) {
                 uint8_t level = rgb_matrix_config.hsv.v;

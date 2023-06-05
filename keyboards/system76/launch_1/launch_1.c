@@ -73,7 +73,7 @@ led_config_t g_led_config = { {
 } };
 #endif // RGB_MATRIX_ENABLE
 
-bool eeprom_is_valid(void) { 
+bool eeprom_is_valid(void) {
     return (
         eeprom_read_word(((void *)EEPROM_MAGIC_ADDR)) == EEPROM_MAGIC &&
         eeprom_read_byte(((void *)EEPROM_VERSION_ADDR)) == EEPROM_VERSION
@@ -188,11 +188,7 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
             if (record->event.pressed) {
                 system76_ec_unlock();
             }
-#ifdef SYSTEM76_EC
             return false;
-#else
-            return true;
-#endif
         case RGB_VAD:
             if (record->event.pressed) {
                 uint8_t level = rgb_matrix_config.hsv.v;
