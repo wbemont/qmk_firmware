@@ -3,7 +3,7 @@
 BOOTMAGIC_ENABLE = no       # Bootmagic Lite
 MOUSEKEY_ENABLE = no        # Mouse keys
 EXTRAKEY_ENABLE = yes       # Audio control and system control
-CONSOLE_ENABLE = no         # Console for debug
+CONSOLE_ENABLE = yes        # Console for debug
 COMMAND_ENABLE = no         # Commands for debug and configuration
 DYNAMIC_KEYMAP_ENABLE = no  # Reconfigurable keyboard without flashing firmware
 EEPROM_DRIVER = wear_leveling
@@ -17,6 +17,9 @@ RGB_MATRIX_ENABLE = no      # RGB matrix
 RGB_MATRIX_CUSTOM_KB = no   # Custom keyboard effects
 AUDIO_ENABLE = no           # Audio output
 LTO_ENABLE = yes            # Link-time optimization for smaller binary
+
+# Add analog component
+SRC += analog.c
 
 # Add System76 EC command interface
 SRC += system76_ec.c

@@ -15,6 +15,7 @@
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "analog.h"
 #include "../system76_ec.h"
 
 #include "thelio_io_2.h"
@@ -223,6 +224,11 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
         case QK_BOOT:
             if (record->event.pressed) {
                 system76_ec_unlock();
+
+                printf("ADC0: %d\n", analogReadPin(ADC0));
+                printf("ADC1: %d\n", analogReadPin(ADC1));
+                printf("ADC2: %d\n", analogReadPin(ADC2));
+                printf("ADC3: %d\n", analogReadPin(ADC3));
             }
             return false;
     }

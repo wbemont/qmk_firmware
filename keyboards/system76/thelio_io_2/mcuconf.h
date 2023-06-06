@@ -18,6 +18,24 @@
 
 #include_next <mcuconf.h>
 
+#define ADC_COUNT 4
+
+// ADC0 is for power button sense
+#undef RP_ADC_USE_ADC0
+#define RP_ADC_USE_ADC0         TRUE
+
+// ADC1 is for power button sense
+#undef RP_ADC_USE_ADC1
+#define RP_ADC_USE_ADC1         TRUE
+
+// ADC2 is for power LED sense
+#undef RP_ADC_USE_ADC2
+#define RP_ADC_USE_ADC2         TRUE
+
+// ADC3 is for power LED sense
+#undef RP_ADC_USE_ADC3
+#define RP_ADC_USE_ADC3         TRUE
+
 // PWM0A used for PWM0, PWM0B used for PWM1
 #undef RP_PWM_USE_PWM0
 #define RP_PWM_USE_PWM0         TRUE
