@@ -37,6 +37,9 @@
 #define ADC2 GP28
 #define ADC3 GP29
 
+#define FAN_TIMEOUT 5000
+static uint32_t fan_time = 0;
+
 #define UNLOCK_TIMEOUT 15000
 static uint32_t unlock_time = 0;
 
@@ -53,6 +56,7 @@ struct Fan {
     int pwm_gpio;
     int tach_gpio;
     uint8_t duty;
+    uint32_t duty_time;
     uint16_t tach;
     uint8_t tach_state;
     uint16_t tach_edge;
@@ -139,7 +143,7 @@ void keyboard_pre_init_kb(void) {
 
     // DIS_PWMIN must be high to control fans
     setPinOutput(DIS_PWMIN);
-    writePinHigh(DIS_PWMIN);
+    writePinLow(DIS_PWMIN);
 
     // Start PWM devices used for fans
     pwmStart(&PWMD0, &PWM_CFG);
@@ -183,6 +187,16 @@ void housekeeping_task_kb(void) {
     fan_scan(&FANOUT3, time);
     fan_scan(&FANOUT4, time);
 
+    // Check if fans are controlled by this device
+    if (readPin(DIS_PWMIN)) {
+        // If fan timeout reached
+        if (TIMER_DIFF_32(time, fan_time) >= FAN_TIMEOUT) {
+            printf("Disable fan control\n");
+            // Disable fan control by this device
+            writePinLow(DIS_PWMIN);
+        }
+    }
+
     // Check if trying to unlock
     if (readPin(PBRELAY)) {
         uint32_t unlock_elapsed = TIMER_DIFF_32(time, unlock_time);
@@ -209,6 +223,26 @@ void housekeeping_task_kb(void) {
         backlight_set(BACKLIGHT_LEVELS - ((time % 1000) * (BACKLIGHT_LEVELS + 1)) / 1000);
 #endif // BACKLIGHT_ENABLE
     }
+
+    //TODO: use info from ADCs
+    static uint32_t adc_time = 0;
+    if (TIMER_DIFF_32(time, adc_time) >= 500) {
+        uint16_t adc0 = analogReadPin(ADC0);
+        uint16_t adc1 = analogReadPin(ADC1);
+        uint16_t adc2 = analogReadPin(ADC2);
+        uint16_t adc3 = analogReadPin(ADC3);
+
+        printf("ADC: %d %d %d %d\n", adc0, adc1, adc2, adc3);
+
+        uint32_t mv0 = (3300 * ((uint32_t)adc0)) / 1024;
+        uint32_t mv1 = (3300 * ((uint32_t)adc1)) / 1024;
+        uint32_t mv2 = (3300 * ((uint32_t)adc2)) / 1024;
+        uint32_t mv3 = (3300 * ((uint32_t)adc3)) / 1024;
+
+        printf("mV: %ld %ld %ld %ld\n", mv0, mv1, mv2, mv3);
+
+        adc_time = time;
+    }
 }
 
 bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
@@ -224,11 +258,6 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
         case QK_BOOT:
             if (record->event.pressed) {
                 system76_ec_unlock();
-
-                printf("ADC0: %d\n", analogReadPin(ADC0));
-                printf("ADC1: %d\n", analogReadPin(ADC1));
-                printf("ADC2: %d\n", analogReadPin(ADC2));
-                printf("ADC3: %d\n", analogReadPin(ADC3));
             }
             return false;
     }
@@ -272,22 +301,29 @@ bool system76_ec_fan_set(uint8_t index, uint8_t duty) {
         case 0:
             FANOUT1.duty = duty;
             fan_init(&FANOUT1);
-            return true;
+            break;
         case 1:
             FANOUT2.duty = duty;
             fan_init(&FANOUT2);
-            return true;
+            break;
         case 2:
             FANOUT3.duty = duty;
             fan_init(&FANOUT3);
-            return true;
+            break;
         case 3:
             FANOUT4.duty = duty;
             fan_init(&FANOUT4);
-            return true;
+            break;
         default:
             return false;
     }
+
+    // Enable fan control by this device and set time
+    printf("Set fan %d to %d\n", index, duty);
+    fan_time = timer_read32();
+    writePinHigh(DIS_PWMIN);
+
+    return true;
 }
 
 bool system76_ec_fan_tach(uint8_t index, uint16_t * tach) {
