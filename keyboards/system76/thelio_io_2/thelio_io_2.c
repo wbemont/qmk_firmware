@@ -37,6 +37,8 @@
 #define ADC2 GP28
 #define ADC3 GP29
 
+static bool suspended = false;
+
 #define FAN_TIMEOUT 5000
 static uint32_t fan_time = 0;
 
@@ -111,9 +113,18 @@ static struct Fan FANOUT4 = {
     .tach_time = 0,
 };
 
-void fan_init(struct Fan * fan) {
-    palSetPadMode(PAL_PORT(fan->pwm_gpio), PAL_PAD(fan->pwm_gpio), BACKLIGHT_PAL_MODE);
+void fan_enable_pwm(struct Fan * fan) {
     pwmEnableChannel(fan->pwm_drv, fan->pwm_chan - 1, fan->duty);
+    palSetLineMode(fan->pwm_gpio, BACKLIGHT_PAL_MODE);
+}
+
+void fan_disable_pwm(struct Fan * fan) {
+    setPinInput(fan->pwm_gpio);
+    pwmDisableChannel(fan->pwm_drv, fan->pwm_chan - 1);
+}
+
+void fan_init(struct Fan * fan) {
+    fan_disable_pwm(fan);
 
     setPinInputHigh(fan->tach_gpio);
     fan->tach_state = readPin(fan->tach_gpio);
@@ -193,6 +204,10 @@ void housekeeping_task_kb(void) {
         if (TIMER_DIFF_32(time, fan_time) >= FAN_TIMEOUT) {
             printf("Disable fan control\n");
             // Disable fan control by this device
+	    fan_disable_pwm(&FANOUT1);
+	    fan_disable_pwm(&FANOUT2);
+	    fan_disable_pwm(&FANOUT3);
+	    fan_disable_pwm(&FANOUT4);
             writePinLow(DIS_PWMIN);
         }
     }
@@ -224,22 +239,22 @@ void housekeeping_task_kb(void) {
 #endif // BACKLIGHT_ENABLE
     }
 
+    int16_t adc0 = analogReadPin(ADC0);
+    int16_t adc1 = analogReadPin(ADC1);
+    int16_t adc2 = analogReadPin(ADC2);
+    int16_t adc3 = analogReadPin(ADC3);
+
     //TODO: use info from ADCs
     static uint32_t adc_time = 0;
     if (TIMER_DIFF_32(time, adc_time) >= 500) {
-        uint16_t adc0 = analogReadPin(ADC0);
-        uint16_t adc1 = analogReadPin(ADC1);
-        uint16_t adc2 = analogReadPin(ADC2);
-        uint16_t adc3 = analogReadPin(ADC3);
-
         printf("ADC: %d %d %d %d\n", adc0, adc1, adc2, adc3);
 
-        uint32_t mv0 = (3300 * ((uint32_t)adc0)) / 1024;
-        uint32_t mv1 = (3300 * ((uint32_t)adc1)) / 1024;
-        uint32_t mv2 = (3300 * ((uint32_t)adc2)) / 1024;
-        uint32_t mv3 = (3300 * ((uint32_t)adc3)) / 1024;
+        int16_t mv0 = (int16_t)(((3300 * (int32_t)adc0) / 1024));
+        int16_t mv1 = (int16_t)(((3300 * (int32_t)adc1) / 1024));
+        int16_t mv2 = (int16_t)(((3300 * (int32_t)adc2) / 1024));
+        int16_t mv3 = (int16_t)(((3300 * (int32_t)adc3) / 1024));
 
-        printf("mV: %ld %ld %ld %ld\n", mv0, mv1, mv2, mv3);
+        printf("mV: %d %d %d %d\n", mv0, mv1, mv2, mv3);
 
         adc_time = time;
     }
@@ -256,7 +271,7 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
 
     switch (keycode) {
         case QK_BOOT:
-            if (record->event.pressed) {
+            if (!record->event.pressed) {
                 system76_ec_unlock();
             }
             return false;
@@ -266,15 +281,11 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
 }
 
 void suspend_wakeup_init_kb(void) {
-#ifdef BACKLIGHT_ENABLE
-    breathing_disable();
-#endif // BACKLIGHT_ENABLE
+    suspended = false;
 }
 
 void suspend_power_down_kb(void) {
-#ifdef BACKLIGHT_ENABLE
-    breathing_enable();
-#endif // BACKLIGHT_ENABLE
+    suspended = true;
 }
 
 bool system76_ec_fan_get(uint8_t index, uint8_t * duty) {
@@ -300,28 +311,29 @@ bool system76_ec_fan_set(uint8_t index, uint8_t duty) {
     switch (index) {
         case 0:
             FANOUT1.duty = duty;
-            fan_init(&FANOUT1);
             break;
         case 1:
             FANOUT2.duty = duty;
-            fan_init(&FANOUT2);
             break;
         case 2:
             FANOUT3.duty = duty;
-            fan_init(&FANOUT3);
             break;
         case 3:
             FANOUT4.duty = duty;
-            fan_init(&FANOUT4);
             break;
         default:
             return false;
     }
 
-    // Enable fan control by this device and set time
     printf("Set fan %d to %d\n", index, duty);
-    fan_time = timer_read32();
+
+    // Enable fan control by this device and set time
+    fan_enable_pwm(&FANOUT1);
+    fan_enable_pwm(&FANOUT2);
+    fan_enable_pwm(&FANOUT3);
+    fan_enable_pwm(&FANOUT4);
     writePinHigh(DIS_PWMIN);
+    fan_time = timer_read32();
 
     return true;
 }
