@@ -39,6 +39,8 @@
 
 static bool suspended = false;
 
+#define DEBOUNCE_TIMEOUT 15
+
 #define FAN_TIMEOUT 5000
 static uint32_t fan_time = 0;
 
@@ -244,19 +246,34 @@ void housekeeping_task_kb(void) {
     int16_t adc2 = analogReadPin(ADC2);
     int16_t adc3 = analogReadPin(ADC3);
 
+    int16_t mv0 = (int16_t)(((3300 * 4 * (int32_t)adc0) / 1024));
+    int16_t mv1 = (int16_t)(((3300 * 4 * (int32_t)adc1) / 1024));
+    int16_t mv2 = (int16_t)(((3300 * 4 * (int32_t)adc2) / 1024));
+    int16_t mv3 = (int16_t)(((3300 * 4 * (int32_t)adc3) / 1024));
+
     //TODO: use info from ADCs
     static uint32_t adc_time = 0;
     if (TIMER_DIFF_32(time, adc_time) >= 500) {
         printf("ADC: %d %d %d %d\n", adc0, adc1, adc2, adc3);
-
-        int16_t mv0 = (int16_t)(((3300 * (int32_t)adc0) / 1024));
-        int16_t mv1 = (int16_t)(((3300 * (int32_t)adc1) / 1024));
-        int16_t mv2 = (int16_t)(((3300 * (int32_t)adc2) / 1024));
-        int16_t mv3 = (int16_t)(((3300 * (int32_t)adc3) / 1024));
-
         printf("mV: %d %d %d %d\n", mv0, mv1, mv2, mv3);
 
         adc_time = time;
+    }
+
+    static bool last_power_btn = false;
+    static uint32_t power_btn_time = 0;
+    bool power_btn = abs(mv1 - mv0) < 1000;
+    if ((power_btn != last_power_btn) && (TIMER_DIFF_32(time, power_btn_time) >= DEBOUNCE_TIMEOUT)) {
+	printf("Power button %d\n", power_btn);
+	last_power_btn = power_btn;
+	power_btn_time = time;
+    }
+
+    static bool last_power_led = false;
+    bool power_led = abs(mv3 - mv2) > 2000;
+    if (power_led != last_power_led) {
+	printf("Power LED %d\n", power_led);
+	last_power_led = power_led;
     }
 }
 
@@ -324,8 +341,6 @@ bool system76_ec_fan_set(uint8_t index, uint8_t duty) {
         default:
             return false;
     }
-
-    printf("Set fan %d to %d\n", index, duty);
 
     // Enable fan control by this device and set time
     fan_enable_pwm(&FANOUT1);
