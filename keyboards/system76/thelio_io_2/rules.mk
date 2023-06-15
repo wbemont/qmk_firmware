@@ -17,6 +17,7 @@ RGB_MATRIX_ENABLE = no      # RGB matrix
 RGB_MATRIX_CUSTOM_KB = no   # Custom keyboard effects
 AUDIO_ENABLE = no           # Audio output
 LTO_ENABLE = yes            # Link-time optimization for smaller binary
+NO_SUSPEND_POWER_DOWN = yes # Do not put the microcontroller into power saving mode
 
 # Add analog component
 SRC += analog.c
