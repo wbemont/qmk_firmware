@@ -47,6 +47,12 @@ static uint32_t fan_time = 0;
 #define UNLOCK_TIMEOUT 15000
 static uint32_t unlock_time = 0;
 
+enum PowerState {
+    POWER_STATE_OFF,
+    POWER_STATE_SUSPEND,
+    POWER_STATE_ON,
+};
+
 const static PWMConfig PWM_CFG = {
     .frequency = 25000, /* PWM clock frequency, 25KHz */
     .period    = 255, /* PWM period in counter ticks. e.g. clock frequency is 25KHz, period is 255 ticks then t_period is 10.2ms */
@@ -180,12 +186,9 @@ void keyboard_post_init_kb(void) {
     debug_keyboard = false;
 #endif // CONSOLE_ENABLE
 
-#ifdef BACKLIGHT_ENABLE
     // Set backlight defaults
-    backlight_enable();
-    backlight_level(BACKLIGHT_LEVELS);
+    backlight_level_noeeprom(0);
     breathing_disable();
-#endif // BACKLIGHT_ENABLE
 
     // Call user post_init function
     keyboard_post_init_user();
@@ -206,10 +209,10 @@ void housekeeping_task_kb(void) {
         if (TIMER_DIFF_32(time, fan_time) >= FAN_TIMEOUT) {
             printf("Disable fan control\n");
             // Disable fan control by this device
-	    fan_disable_pwm(&FANOUT1);
-	    fan_disable_pwm(&FANOUT2);
-	    fan_disable_pwm(&FANOUT3);
-	    fan_disable_pwm(&FANOUT4);
+            fan_disable_pwm(&FANOUT1);
+            fan_disable_pwm(&FANOUT2);
+            fan_disable_pwm(&FANOUT3);
+            fan_disable_pwm(&FANOUT4);
             writePinLow(DIS_PWMIN);
         }
     }
@@ -223,22 +226,16 @@ void housekeeping_task_kb(void) {
             // If unlock timer not expired
             (unlock_elapsed <= UNLOCK_TIMEOUT)
         ) {
-#ifdef BACKLIGHT_ENABLE
-        backlight_set(((time % 1000) * (BACKLIGHT_LEVELS + 1)) / 1000);
-#endif // BACKLIGHT_ENABLE
+            backlight_set(((time % 1000) * (BACKLIGHT_LEVELS + 1)) / 1000);
         } else {
             // Disable power button override
             writePinLow(PBRELAY);
-#ifdef BACKLIGHT_ENABLE
             backlight_set(get_backlight_level());
-#endif // BACKLIGHT_ENABLE
         }
     }
 
     if (system76_ec_is_unlocked()) {
-#ifdef BACKLIGHT_ENABLE
         backlight_set(BACKLIGHT_LEVELS - ((time % 1000) * (BACKLIGHT_LEVELS + 1)) / 1000);
-#endif // BACKLIGHT_ENABLE
     }
 
     int16_t adc0 = analogReadPin(ADC0);
@@ -264,16 +261,34 @@ void housekeeping_task_kb(void) {
     static uint32_t power_btn_time = 0;
     bool power_btn = abs(mv1 - mv0) < 1000;
     if ((power_btn != last_power_btn) && (TIMER_DIFF_32(time, power_btn_time) >= DEBOUNCE_TIMEOUT)) {
-	printf("Power button %d\n", power_btn);
-	last_power_btn = power_btn;
-	power_btn_time = time;
+        printf("Power button %d\n", power_btn);
+        last_power_btn = power_btn;
+        power_btn_time = time;
     }
 
-    static bool last_power_led = false;
-    bool power_led = abs(mv3 - mv2) > 2000;
-    if (power_led != last_power_led) {
-	printf("Power LED %d\n", power_led);
-	last_power_led = power_led;
+    static enum PowerState last_power_state = POWER_STATE_OFF;
+    enum PowerState power_state = last_power_state;
+    if (suspended) {
+        power_state = POWER_STATE_SUSPEND;
+    } else if (abs(mv3 - mv2) > 2000) {
+        power_state = POWER_STATE_ON;
+    } else {
+        power_state = POWER_STATE_OFF;
+    }
+    if (power_state != last_power_state) {
+        printf("Power state %d\n", power_state);
+        last_power_state = power_state;
+
+        switch (power_state) {
+            case POWER_STATE_ON:
+                backlight_level_noeeprom(BACKLIGHT_LEVELS);
+                break;
+            case POWER_STATE_OFF:
+                backlight_level_noeeprom(0);
+                break;
+            default:
+                break;
+        }
     }
 }
 
@@ -298,10 +313,16 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
 }
 
 void suspend_wakeup_init_kb(void) {
+    if (suspended) {
+        breathing_disable();
+    }
     suspended = false;
 }
 
 void suspend_power_down_kb(void) {
+    if (!suspended) {
+        breathing_enable();
+    }
     suspended = true;
 }
 
