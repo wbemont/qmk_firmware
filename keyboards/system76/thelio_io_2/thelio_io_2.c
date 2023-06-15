@@ -54,8 +54,8 @@ enum PowerState {
 };
 
 const static PWMConfig PWM_CFG = {
-    .frequency = 25000, /* PWM clock frequency, 25KHz */
-    .period    = 255, /* PWM period in counter ticks. e.g. clock frequency is 25KHz, period is 255 ticks then t_period is 10.2ms */
+    .frequency = 6375000, /* PWM clock frequency, 25KHz, multiplied by 255 ticks */
+    .period    = 254, /* PWM period in counter ticks minus one. e.g. clock frequency is 25KHz, period is 255 ticks then t_period is 40us */
     .channels[RP2040_PWM_CHANNEL_A - 1].mode = PWM_OUTPUT_ACTIVE_LOW,
     .channels[RP2040_PWM_CHANNEL_B - 1].mode = PWM_OUTPUT_ACTIVE_LOW,
 };
