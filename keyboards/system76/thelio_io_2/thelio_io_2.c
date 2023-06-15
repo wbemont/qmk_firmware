@@ -194,9 +194,8 @@ void keyboard_post_init_kb(void) {
     keyboard_post_init_user();
 }
 
-void housekeeping_task_kb(void) {
-    uint32_t time = timer_read32();
-
+// Handle fans
+static void fan_task(uint32_t time) {
     // Scan fans for tachometer
     fan_scan(&FANOUT1, time);
     fan_scan(&FANOUT2, time);
@@ -216,28 +215,10 @@ void housekeeping_task_kb(void) {
             writePinLow(DIS_PWMIN);
         }
     }
+}
 
-    // Check if trying to unlock
-    if (readPin(PBRELAY)) {
-        uint32_t unlock_elapsed = TIMER_DIFF_32(time, unlock_time);
-        if (
-            // If not unlocked
-            !system76_ec_is_unlocked() &&
-            // If unlock timer not expired
-            (unlock_elapsed <= UNLOCK_TIMEOUT)
-        ) {
-            backlight_set(((time % 1000) * (BACKLIGHT_LEVELS + 1)) / 1000);
-        } else {
-            // Disable power button override
-            writePinLow(PBRELAY);
-            backlight_set(get_backlight_level());
-        }
-    }
-
-    if (system76_ec_is_unlocked()) {
-        backlight_set(BACKLIGHT_LEVELS - ((time % 1000) * (BACKLIGHT_LEVELS + 1)) / 1000);
-    }
-
+// Handle power button and power LED
+static void power_task(uint32_t time) {
     int16_t adc0 = analogReadPin(ADC0);
     int16_t adc1 = analogReadPin(ADC1);
     int16_t adc2 = analogReadPin(ADC2);
@@ -247,15 +228,6 @@ void housekeeping_task_kb(void) {
     int16_t mv1 = (int16_t)(((3300 * 4 * (int32_t)adc1) / 1024));
     int16_t mv2 = (int16_t)(((3300 * 4 * (int32_t)adc2) / 1024));
     int16_t mv3 = (int16_t)(((3300 * 4 * (int32_t)adc3) / 1024));
-
-    //TODO: use info from ADCs
-    static uint32_t adc_time = 0;
-    if (TIMER_DIFF_32(time, adc_time) >= 500) {
-        printf("ADC: %d %d %d %d\n", adc0, adc1, adc2, adc3);
-        printf("mV: %d %d %d %d\n", mv0, mv1, mv2, mv3);
-
-        adc_time = time;
-    }
 
     static bool last_power_btn = false;
     static uint32_t power_btn_time = 0;
@@ -282,14 +254,64 @@ void housekeeping_task_kb(void) {
         switch (power_state) {
             case POWER_STATE_ON:
                 backlight_level_noeeprom(BACKLIGHT_LEVELS);
+                breathing_disable();
                 break;
             case POWER_STATE_OFF:
                 backlight_level_noeeprom(0);
+                breathing_disable();
                 break;
             default:
+                backlight_level_noeeprom(BACKLIGHT_LEVELS);
+                breathing_enable();
                 break;
         }
     }
+}
+
+// Handle power button relay and firmware unlock
+static void unlock_task(uint32_t time) {
+    // Check if trying to unlock
+    if (readPin(PBRELAY)) {
+        uint32_t unlock_elapsed = TIMER_DIFF_32(time, unlock_time);
+        if (
+            // If not unlocked
+            !system76_ec_is_unlocked() &&
+            // If unlock timer not expired
+            (unlock_elapsed <= UNLOCK_TIMEOUT)
+        ) {
+            backlight_set(((time % 1000) * (BACKLIGHT_LEVELS + 1)) / 1000);
+        } else {
+            // Disable power button override
+            writePinLow(PBRELAY);
+            backlight_set(get_backlight_level());
+        }
+    }
+
+    if (system76_ec_is_unlocked()) {
+        backlight_set(BACKLIGHT_LEVELS - ((time % 1000) * (BACKLIGHT_LEVELS + 1)) / 1000);
+    }
+}
+
+// This function is called repeatedly while the system is awake
+void housekeeping_task_kb(void) {
+    uint32_t time = timer_read32();
+
+    fan_task(time);
+    power_task(time);
+    unlock_task(time);
+}
+
+// This function is called when the system wakes
+void suspend_wakeup_init_kb(void) {
+    suspended = false;
+}
+
+// This function is called repeatedly when the system is suspended
+void suspend_power_down_kb(void) {
+    suspended = true;
+
+    // Run housekeeping task (which is blocked while suspended)
+    housekeeping_task_kb();
 }
 
 bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
@@ -310,20 +332,6 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
     }
 
     return true;
-}
-
-void suspend_wakeup_init_kb(void) {
-    if (suspended) {
-        breathing_disable();
-    }
-    suspended = false;
-}
-
-void suspend_power_down_kb(void) {
-    if (!suspended) {
-        breathing_enable();
-    }
-    suspended = true;
 }
 
 bool system76_ec_fan_get(uint8_t index, uint8_t * duty) {
