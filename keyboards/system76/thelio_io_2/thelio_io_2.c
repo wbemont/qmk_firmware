@@ -37,9 +37,17 @@
 #define ADC2 GP28
 #define ADC3 GP29
 
-static bool suspended = false;
+// True when driver has suspended
+static bool driver_suspended = false;
 
+// True when USB is suspended
+static bool usb_suspended = false;
+
+// Debounce time, in ms
 #define DEBOUNCE_TIMEOUT 15
+
+// Time before MB LED turns off so suspend status can be determined, in ms
+#define MB_LED_OFF_TIMEOUT 2000
 
 #define FAN_TIMEOUT 5000
 static uint32_t fan_time = 0;
@@ -229,40 +237,54 @@ static void power_task(uint32_t time) {
     int16_t mv2 = (int16_t)(((3300 * 4 * (int32_t)adc2) / 1024));
     int16_t mv3 = (int16_t)(((3300 * 4 * (int32_t)adc3) / 1024));
 
-    static bool last_power_btn = false;
-    static uint32_t power_btn_time = 0;
-    bool power_btn = abs(mv1 - mv0) < 1000;
-    if ((power_btn != last_power_btn) && (TIMER_DIFF_32(time, power_btn_time) >= DEBOUNCE_TIMEOUT)) {
-        printf("Power button %d\n", power_btn);
-        last_power_btn = power_btn;
-        power_btn_time = time;
+    // Deterine the current FP button state based on ADC readings, debounced
+    static bool fp_btn = false;
+    static uint32_t fp_btn_time = 0;
+    bool next_fp_btn = abs(mv1 - mv0) < 1000;
+    if ((next_fp_btn != fp_btn) && (TIMER_DIFF_32(time, fp_btn_time) >= DEBOUNCE_TIMEOUT)) {
+        printf("FP button %d\n", next_fp_btn);
+        fp_btn = next_fp_btn;
+        fp_btn_time = time;
     }
 
+    // Determine the current MB LED state based on ADC readings, debounced
+    static bool mb_led = false;
+    static uint32_t mb_led_time = 0;
+    bool next_mb_led = abs(mv3 - mv2) > 2000;
+    if ((next_mb_led != mb_led) && (TIMER_DIFF_32(time, mb_led_time) >= DEBOUNCE_TIMEOUT)) {
+        printf("MB LED %d\n", next_mb_led);
+        mb_led = next_mb_led;
+        mb_led_time = time;
+    }
+
+    // Determine the power state (off, on, suspended)
     static enum PowerState last_power_state = POWER_STATE_OFF;
     enum PowerState power_state = last_power_state;
-    if (suspended) {
+    if (driver_suspended) {
         power_state = POWER_STATE_SUSPEND;
-    } else if (abs(mv3 - mv2) > 2000) {
+    } else if (mb_led) {
         power_state = POWER_STATE_ON;
     } else {
         power_state = POWER_STATE_OFF;
     }
+
+    // Apply power state to LED
     if (power_state != last_power_state) {
         printf("Power state %d\n", power_state);
         last_power_state = power_state;
 
         switch (power_state) {
-            case POWER_STATE_ON:
-                backlight_level_noeeprom(BACKLIGHT_LEVELS);
-                breathing_disable();
-                break;
             case POWER_STATE_OFF:
                 backlight_level_noeeprom(0);
                 breathing_disable();
                 break;
-            default:
+            case POWER_STATE_SUSPEND:
                 backlight_level_noeeprom(BACKLIGHT_LEVELS);
                 breathing_enable();
+                break;
+            case POWER_STATE_ON:
+                backlight_level_noeeprom(BACKLIGHT_LEVELS);
+                breathing_disable();
                 break;
         }
     }
@@ -303,12 +325,12 @@ void housekeeping_task_kb(void) {
 
 // This function is called when the system wakes
 void suspend_wakeup_init_kb(void) {
-    suspended = false;
+    usb_suspended = false;
 }
 
-// This function is called repeatedly when the system is suspended
+// This function is called repeatedly when the system has suspended USB
 void suspend_power_down_kb(void) {
-    suspended = true;
+    usb_suspended = true;
 
     // Run housekeeping task (which is blocked while suspended)
     housekeeping_task_kb();
@@ -395,6 +417,35 @@ bool system76_ec_fan_tach(uint8_t index, uint16_t * tach) {
             return true;
         case 3:
             *tach = FANOUT4.tach;
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool system76_ec_led_get_mode(uint8_t layer, uint8_t * mode, uint8_t * speed) {
+    switch (layer) {
+        case 0:
+            if (driver_suspended) {
+                *mode = 1;
+            } else {
+                *mode = 0;
+            }
+            *speed = 0;
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool system76_ec_led_set_mode(uint8_t layer, uint8_t mode, uint8_t speed) {
+    switch (layer) {
+        case 0:
+            if (mode > 0) {
+                driver_suspended = true;
+            } else {
+                driver_suspended = false;
+            }
             return true;
         default:
             return false;

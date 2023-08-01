@@ -107,6 +107,14 @@ __attribute__((weak)) bool system76_ec_fan_tach(uint8_t index, uint16_t * tach) 
     return false;
 }
 
+__attribute__((weak)) bool system76_ec_led_get_mode(uint8_t layer, uint8_t * mode, uint8_t * speed) {
+    return false;
+}
+
+__attribute__((weak)) bool system76_ec_led_set_mode(uint8_t layer, uint8_t mode, uint8_t speed) {
+    return false;
+}
+
 __attribute__((weak)) bool system76_ec_security_get(enum SecurityState * security_state) {
     return false;
 }
@@ -413,6 +421,17 @@ void raw_hid_receive(uint8_t *data, uint8_t length) {
         case CMD_LED_SAVE:
             if (!bootloader_unlocked) {
                 system76_ec_rgb_eeprom(true);
+                data[1] = 0;
+            }
+            break;
+#else   // RGB_MATRIX_CUSTOM_KB
+        case CMD_LED_GET_MODE:
+            if (system76_ec_led_get_mode(data[2], &data[3], &data[4])) {
+                data[1] = 0;
+            }
+            break;
+        case CMD_LED_SET_MODE:
+            if (system76_ec_led_set_mode(data[2], data[3], data[4])) {
                 data[1] = 0;
             }
             break;
