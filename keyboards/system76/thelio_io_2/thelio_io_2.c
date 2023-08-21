@@ -242,7 +242,7 @@ static void power_task(uint32_t time) {
     static uint32_t fp_btn_time = 0;
     bool next_fp_btn = abs(mv1 - mv0) < 1000;
     if ((next_fp_btn != fp_btn) && (TIMER_DIFF_32(time, fp_btn_time) >= DEBOUNCE_TIMEOUT)) {
-        printf("FP button %d\n", next_fp_btn);
+        printf("FP BTN %d\n", next_fp_btn);
         fp_btn = next_fp_btn;
         fp_btn_time = time;
     }
@@ -269,23 +269,35 @@ static void power_task(uint32_t time) {
     }
 
     // Apply power state to LED
+    static uint8_t bl_level = 0;
+    static bool bl_breathing = false;
     if (power_state != last_power_state) {
         printf("Power state %d\n", power_state);
         last_power_state = power_state;
 
         switch (power_state) {
             case POWER_STATE_OFF:
-                backlight_level_noeeprom(0);
-                breathing_disable();
+                bl_level = 0;
+                bl_breathing = false;
                 break;
             case POWER_STATE_SUSPEND:
-                backlight_level_noeeprom(BACKLIGHT_LEVELS);
-                breathing_enable();
+                bl_level = BACKLIGHT_LEVELS;
+                bl_breathing = true;
                 break;
             case POWER_STATE_ON:
-                backlight_level_noeeprom(BACKLIGHT_LEVELS);
-                breathing_disable();
+                bl_level = BACKLIGHT_LEVELS;
+                bl_breathing = false;
                 break;
+        }
+    }
+    if (bl_level != get_backlight_level()) {
+        backlight_level_noeeprom(bl_level);
+    }
+    if (bl_breathing != is_breathing()) {
+        if (bl_breathing) {
+            breathing_enable();
+        } else {
+            breathing_disable();
         }
     }
 }
