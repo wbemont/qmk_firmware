@@ -34,7 +34,7 @@
 #define DIODE_DIRECTION COL2ROW
 
 #ifdef RGB_MATRIX_ENABLE
-#    define RGB_DI_PIN GP5
+#    define WS2812_DI_PIN GP5
 #    define RGB_MATRIX_LED_COUNT 84
 #    define RGB_MATRIX_KEYPRESSES                                      // Reacts to keypresses
 // #    define RGB_MATRIX_KEYRELEASES                                     // Reacts to keyreleases (instead of keypresses)
@@ -70,7 +70,7 @@
 #define LOCKING_RESYNC_ENABLE
 
 // I2C {
-#define I2C_DRIVER I2CD2
+#define I2C_DRIVER I2CD1
 #define I2C1_CLOCK_SPEED 100000UL // Run I2C bus at 100 kHz
 #define I2C1_SCL_PIN GP27
 #define I2C1_SDA_PIN GP26

@@ -34,7 +34,7 @@
 #define DIODE_DIRECTION COL2ROW
 
 #ifdef RGB_MATRIX_ENABLE
-#    define RGB_DI_PIN F7
+#    define WS2812_DI_PIN F7
 #    define RGB_MATRIX_LED_COUNT 70
 #    define RGB_MATRIX_KEYPRESSES                                      // Reacts to keypresses
 // #    define RGB_MATRIX_KEYRELEASES                                     // Reacts to keyreleases (instead of keypresses)
